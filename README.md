@@ -102,24 +102,24 @@ So the meter is up whenever you build, without remembering to start it:
 
 **Windows — Scheduled Task (runs at logon):**
 ```powershell
-schtasks /create /tn "TOKENHOURS Live" /tr "cmd /c npx -y github:LeadGenius1/tokenhours-live" /sc onlogon /rl highest /f
+schtasks /create /tn "TOKENHOURS Live" /tr "cmd /c npx -y tokenhours-live" /sc onlogon /rl highest /f
 # stop / remove:
 schtasks /end /tn "TOKENHOURS Live";  schtasks /delete /tn "TOKENHOURS Live" /f
 ```
 Set a fixed token first (so the HUD/statusline can read it): `setx TH_TOKEN yourtoken`.
 
 **Windows — Startup shortcut:** press `Win+R` → `shell:startup` → new shortcut to
-`cmd /c npx -y github:LeadGenius1/tokenhours-live`.
+`cmd /c npx -y tokenhours-live`.
 
 **macOS / Linux — keep it supervised:**
 ```bash
-npm i -g pm2 && pm2 start "npx -y github:LeadGenius1/tokenhours-live" --name tokenhours-live && pm2 save
+npm i -g pm2 && pm2 start "npx -y tokenhours-live" --name tokenhours-live && pm2 save
 ```
 
 ## Troubleshooting
 
 - **HUD shows "connection refused" / "site can't be reached" / `RECONNECT`.**
-  The meter isn't running — start it with `npx github:LeadGenius1/tokenhours-live`, then reload the HUD.
+  The meter isn't running — start it with `npx tokenhours-live`, then reload the HUD.
 - **HUD loads but the number stays $0.** Your build isn't routed through the meter yet — set
   `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` (see Quickstart) and make a request.
 - **`401 unauthorized` on the HUD.** Open it from the meter's own URL (it injects the token), or
