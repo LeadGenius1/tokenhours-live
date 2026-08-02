@@ -82,15 +82,21 @@ async function loadRates() {
     return `${OFFLINE ? "offline" : "fallback"} · ${RATES.length} models · as of ${asOf}`;
   } catch { RATES = []; return "no price table"; }
 }
+// canonicalize a model id for matching: lowercase, and collapse . _ - runs to a
+// single "-" so a runtime id like "claude-opus-4-8" matches the table's dot-form
+// "anthropic/claude-opus-4.8". Without this the flagship models fall through to the
+// estimated default rate (caught by the 2026-08-02 live reconciliation).
+const canon = (s) => String(s ?? "").toLowerCase().replace(/[._-]+/g, "-");
+const bareId = (s) => { const t = String(s ?? ""); return t.includes("/") ? t.slice(t.lastIndexOf("/") + 1) : t; };
 function rateFor(model) {
   if (!model) return DEFAULT_RATE;
-  const m = String(model).toLowerCase();
-  const bare = m.includes("/") ? m.split("/").pop() : m;
+  const m = canon(model);
+  const bare = canon(bareId(model));
   let hit =
-    RATES.find(r => r.id?.toLowerCase() === m) ||
-    RATES.find(r => (r.id?.toLowerCase().split("/").pop() || "") === bare) ||
-    RATES.find(r => bare && (r.id?.toLowerCase().includes(bare) || bare.includes(r.id?.toLowerCase().split("/").pop() || "\0"))) ||
-    RATES.find(r => r.name && bare.includes(r.name.toLowerCase().replace(/\s+/g, "-")));
+    RATES.find(r => canon(r.id) === m) ||
+    RATES.find(r => canon(bareId(r.id)) === bare) ||
+    RATES.find(r => { const rb = canon(bareId(r.id)); return bare && rb && (rb.includes(bare) || bare.includes(rb)); }) ||
+    RATES.find(r => r.name && bare.includes(canon(r.name.replace(/\s+/g, "-"))));
   return hit || DEFAULT_RATE;
 }
 

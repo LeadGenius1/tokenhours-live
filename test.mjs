@@ -13,11 +13,14 @@ const __dir = dirname(fileURLToPath(import.meta.url));
 const METER_PORT = 4318, MOCK_PORT = 4319, TOKEN = "testtok";
 const RATES = JSON.parse(await readFile(join(__dir, "prices.fallback.json"), "utf8"));
 
-// mirror meter's rateFor + price formula (proves the pipeline is arithmetically exact)
+// mirror meter's rateFor + price formula (proves the pipeline is arithmetically exact).
+// Separator-insensitive: dash-form runtime ids match the table's dot-form ids.
+const canon = (s) => String(s ?? "").toLowerCase().replace(/[._-]+/g, "-");
+const bareId = (s) => { const t = String(s ?? ""); return t.includes("/") ? t.slice(t.lastIndexOf("/") + 1) : t; };
 function rateFor(model) {
-  const m = String(model).toLowerCase(), bare = m.includes("/") ? m.split("/").pop() : m;
-  return RATES.find(r => r.id?.toLowerCase() === m) ||
-    RATES.find(r => (r.id?.toLowerCase().split("/").pop() || "") === bare) ||
+  const m = canon(model), bare = canon(bareId(model));
+  return RATES.find(r => canon(r.id) === m) ||
+    RATES.find(r => canon(bareId(r.id)) === bare) ||
     { input: 3, output: 15, cached: 0.3 };
 }
 const price = ({ model, input = 0, output = 0, cacheRead = 0, cacheWrite = 0 }) => {
@@ -122,6 +125,29 @@ console.log(`\nTOKENHOURS Live — accuracy proof  (rates: bundled offline table
   let ok = true; for (const [c, want] of cases) if (stateOf(c, b) !== want) ok = false;
   ok ? pass++ : fail++;
   console.log(`  ${ok ? "✓" : "✗"} threshold states  nominal <0.7≤ caution <1.0≤ over  (budget $${b})`);
+}
+// 7 · REAL runtime ids resolve to the PUBLISHED rate, not the estimated default.
+//     Runtime emits dash ids ("claude-opus-4-8"); the table lists dot ids
+//     ("anthropic/claude-opus-4.8"). Before the rateFor() separator fix these fell
+//     through to the est default (3/15/0.3) — the flagship model was mispriced.
+//     Regression guard for the 2026-08-02 live-reconciliation finding.
+{
+  const cases = [
+    { id: "claude-opus-4-8",  row: "anthropic/claude-opus-4.8" },
+    { id: "claude-haiku-4-5", row: "anthropic/claude-haiku-4.5" },
+  ];
+  let ok = true; const detail = [];
+  for (const c of cases) {
+    const pub = RATES.find(r => r.id === c.row);
+    const got = await send("/anthropic/v1/messages", { model: c.id, shape: "anthropic", in: 100000, out: 5000, cr: 200000, cw: 0 });
+    const want = 100000 / 1e6 * pub.input + 5000 / 1e6 * pub.output + 200000 / 1e6 * (pub.cached ?? pub.input * 0.1);
+    const bm = (await state()).models.find(m => m.id === c.id);
+    const priced = approx(got, want), notEst = !!bm && bm.estimated === false;
+    if (!priced || !notEst) ok = false;
+    detail.push(`${c.id}→${c.row.split("/").pop()}${priced ? "" : " COST≠pub"}${notEst ? "" : " EST!"}`);
+  }
+  ok ? pass++ : fail++;
+  console.log(`  ${ok ? "✓" : "✗"} real runtime ids map to published rate (no est fallback)\n      ${detail.join("  ·  ")}`);
 }
 
 console.log(`\n  ${fail === 0 ? "PASS" : "FAIL"} — ${pass} checks passed, ${fail} failed\n`);
