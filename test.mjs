@@ -5,7 +5,7 @@
 // accounting. Run: node test.mjs
 import http from "node:http";
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -58,8 +58,10 @@ const mock = http.createServer(async (req, res) => {
 await new Promise(r => mock.listen(MOCK_PORT, "127.0.0.1", r));
 
 // ---- spawn the real meter, pointed at the mock, deterministic offline rates ----
+await rm(join(__dir, ".test-session.json"), { force: true });   // start clean, never resume
 const meter = spawn(process.execPath, [join(__dir, "meter.mjs")], {
   env: { ...process.env, PORT: METER_PORT, TH_TOKEN: TOKEN, TH_OFFLINE: "1", TH_BUDGET: "25",
+    TH_STATE: join(__dir, ".test-session.json"),   // isolated — never touch the real session
     ANTHROPIC_UPSTREAM: `http://127.0.0.1:${MOCK_PORT}`, OPENAI_UPSTREAM: `http://127.0.0.1:${MOCK_PORT}` },
   stdio: "ignore",
 });

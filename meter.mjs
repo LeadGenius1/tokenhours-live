@@ -18,7 +18,9 @@
 
 import http from "node:http";
 import crypto from "node:crypto";
-import { readFile } from "node:fs/promises";
+import os from "node:os";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -44,6 +46,7 @@ const HORIZON = +(process.env.TH_HORIZON_HOURS || 40);  // projection horizon (h
 const UP_ANTHROPIC = process.env.ANTHROPIC_UPSTREAM || "https://api.anthropic.com";
 const UP_OPENAI = process.env.OPENAI_UPSTREAM || "https://api.openai.com";
 const PRICES_URL = process.env.TH_PRICES_URL || "https://tokenhours.com/api/prices";
+const STATE_FILE = process.env.TH_STATE || join(os.homedir(), ".tokenhours-live", "session.json");
 const SELF_ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]);
 const SELF_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
 
@@ -116,7 +119,7 @@ function priceCharge({ model, input = 0, output = 0, cacheRead = 0, cacheWrite =
   const key = model || "unknown";
   const bm = (S.byModel[key] ||= { cost: 0, input: 0, output: 0, cacheRead: 0, reqs: 0, estimated: !!r._default });
   bm.cost += c; bm.input += input; bm.output += output; bm.cacheRead += cacheRead; bm.reqs += 1;
-  broadcast();
+  broadcast(); scheduleSave();
   return c;
 }
 
@@ -144,6 +147,18 @@ function broadcast() {
   const line = `data: ${JSON.stringify(snapshot())}\n\n`;
   for (const c of clients) { try { c.write(line); } catch {} }
 }
+
+// ---------- session persistence (survive terminal close / restart) ----------
+// Running totals are written to a local JSON so a restart RESUMES instead of zeroing.
+const PERSIST_KEYS = ["startedAt", "requests", "errors", "cost", "input", "output", "cacheRead", "cacheWrite", "toolDefTokEst", "toolResultTokEst", "byModel", "connectors"];
+let saveTimer = null, resumed = false;
+const collectPersist = () => { const o = {}; for (const k of PERSIST_KEYS) o[k] = S[k]; return o; };
+async function saveState() { try { await mkdir(dirname(STATE_FILE), { recursive: true }); await writeFile(STATE_FILE, JSON.stringify(collectPersist())); } catch {} }
+function scheduleSave() { if (saveTimer) return; saveTimer = setTimeout(() => { saveTimer = null; saveState(); }, 800); }
+function saveSync() { try { mkdirSync(dirname(STATE_FILE), { recursive: true }); writeFileSync(STATE_FILE, JSON.stringify(collectPersist())); } catch {} }
+async function loadState() { try { if (!existsSync(STATE_FILE)) return; const d = JSON.parse(await readFile(STATE_FILE, "utf8")); for (const k of PERSIST_KEYS) if (d[k] != null) S[k] = d[k]; resumed = S.cost > 0 || S.requests > 0; } catch {} }
+process.on("SIGINT", () => { saveSync(); process.exit(0); });
+process.on("SIGTERM", () => { saveSync(); process.exit(0); });
 
 // ---------- usage parsing ----------
 // Provider-correct usage accounting. Critical distinction:
@@ -275,11 +290,11 @@ const server = http.createServer(async (req, res) => {
     if (url === "/state") { res.writeHead(200, { "content-type": "application/json" }); return void res.end(JSON.stringify(snapshot())); }
     if (url === "/reset" && req.method === "POST") {
       Object.assign(S, { startedAt: Date.now(), requests: 0, errors: 0, cost: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, toolDefTokEst: 0, toolResultTokEst: 0, byModel: {}, connectors: [], lastModel: null, lastCost: 0 });
-      broadcast(); res.writeHead(200); return void res.end("ok");
+      broadcast(); saveState(); res.writeHead(200); return void res.end("ok");
     }
     if (url === "/meter/connector" && req.method === "POST") {
       const b = Buffer.concat(await collect(req)).toString("utf8");
-      try { const { name, cost, note } = JSON.parse(b); S.connectors.push({ name: name || "connector", cost: +cost || 0, note, at: Date.now() }); S.cost += +cost || 0; broadcast(); res.writeHead(200); res.end("ok"); }
+      try { const { name, cost, note } = JSON.parse(b); S.connectors.push({ name: name || "connector", cost: +cost || 0, note, at: Date.now() }); S.cost += +cost || 0; broadcast(); scheduleSave(); res.writeHead(200); res.end("ok"); }
       catch { res.writeHead(400); res.end("bad json"); }
       return;
     }
@@ -310,6 +325,7 @@ function runDemo() {
   setTimeout(() => S.connectors.push({ name: "Stripe API", cost: 0.02, at: Date.now() }) || (S.cost += 0.02) || broadcast(), 4200);
 }
 
+await loadState();
 const note = await loadRates(); S.rateNote = note;
 if (!OFFLINE) setInterval(async () => { S.rateNote = await loadRates(); }, 36e5);
 server.listen(PORT, HOST, () => {
@@ -317,5 +333,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  HUD    → http://localhost:${PORT}/?token=${TOKEN}`);
   console.log(`  rates  → ${note}${OFFLINE ? " (offline)" : ""}`);
   console.log(`  bound  → ${HOST}:${PORT} · loopback only · token-authed · numbers-only channel`);
+  if (resumed) console.log(`  resumed→ $${S.cost.toFixed(4)} · ${S.requests} req  (from ${STATE_FILE} · press R in the HUD to reset)`);
+  else console.log(`  state  → ${STATE_FILE}  (persists across restarts)`);
   console.log(`  point clients at  /anthropic  and  /openai/v1\n`);
 });

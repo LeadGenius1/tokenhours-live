@@ -78,6 +78,7 @@ curl -XPOST localhost:4317/meter/connector \
 | `ANTHROPIC_UPSTREAM` | `https://api.anthropic.com` | Anthropic origin |
 | `OPENAI_UPSTREAM` | `https://api.openai.com` | OpenAI-compatible origin |
 | `TH_PRICES_URL` | `https://tokenhours.com/api/prices` | Live rate table (falls back to bundled `prices.fallback.json`) |
+| `TH_STATE` | `~/.tokenhours-live/session.json` | Where the running session is persisted (see below) |
 
 ## Endpoints
 
@@ -87,3 +88,41 @@ curl -XPOST localhost:4317/meter/connector \
 - `POST /reset` — zero the session (or press **R** in the HUD)
 - `POST /meter/connector` — add a non-LLM connector cost
 - `ANY /anthropic/*`, `ANY /openai/*` — metered pass-through proxies
+
+## Session persistence
+
+Running totals are written to `~/.tokenhours-live/session.json` (override with `TH_STATE`) as
+they change and on exit — so **closing the terminal no longer zeroes your session.** Restart the
+meter and it resumes where it left off; the startup banner prints `resumed→ $X · N req`. Press **R**
+in the HUD (or `POST /reset`) to start a fresh session.
+
+## Keep it always-on (optional)
+
+So the meter is up whenever you build, without remembering to start it:
+
+**Windows — Scheduled Task (runs at logon):**
+```powershell
+schtasks /create /tn "TOKENHOURS Live" /tr "cmd /c npx -y github:LeadGenius1/tokenhours-live" /sc onlogon /rl highest /f
+# stop / remove:
+schtasks /end /tn "TOKENHOURS Live";  schtasks /delete /tn "TOKENHOURS Live" /f
+```
+Set a fixed token first (so the HUD/statusline can read it): `setx TH_TOKEN yourtoken`.
+
+**Windows — Startup shortcut:** press `Win+R` → `shell:startup` → new shortcut to
+`cmd /c npx -y github:LeadGenius1/tokenhours-live`.
+
+**macOS / Linux — keep it supervised:**
+```bash
+npm i -g pm2 && pm2 start "npx -y github:LeadGenius1/tokenhours-live" --name tokenhours-live && pm2 save
+```
+
+## Troubleshooting
+
+- **HUD shows "connection refused" / "site can't be reached" / `RECONNECT`.**
+  The meter isn't running — start it with `npx github:LeadGenius1/tokenhours-live`, then reload the HUD.
+- **HUD loads but the number stays $0.** Your build isn't routed through the meter yet — set
+  `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` (see Quickstart) and make a request.
+- **`401 unauthorized` on the HUD.** Open it from the meter's own URL (it injects the token), or
+  start the meter with a fixed `TH_TOKEN` and open `http://localhost:4317/?token=<TH_TOKEN>`.
+- **Costs read `(est rate)`.** The model id didn't match the rate table — cost uses a default rate.
+  Check the model id against tokenhours.com; file an issue with the id.
