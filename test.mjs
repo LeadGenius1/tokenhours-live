@@ -133,8 +133,9 @@ console.log(`\nTOKENHOURS Live — accuracy proof  (rates: bundled offline table
 //     Regression guard for the 2026-08-02 live-reconciliation finding.
 {
   const cases = [
-    { id: "claude-opus-4-8",  row: "anthropic/claude-opus-4.8" },
-    { id: "claude-haiku-4-5", row: "anthropic/claude-haiku-4.5" },
+    { id: "claude-opus-4-8",   row: "anthropic/claude-opus-4.8" },
+    { id: "claude-haiku-4-5",  row: "anthropic/claude-haiku-4.5" },
+    { id: "claude-sonnet-4-6", row: "anthropic/claude-sonnet-4.6" },
   ];
   let ok = true; const detail = [];
   for (const c of cases) {
