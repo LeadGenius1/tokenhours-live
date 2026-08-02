@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOKENHOURS · Live Meter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#050607; --face:#0a0c0e; --fg:#EDE7DF; --dim:rgba(237,231,223,.42);
+    --dimmer:rgba(237,231,223,.24); --hair:rgba(237,231,223,.10);
+    --accent:#4A6BB8; --nominal:#39FF14; --caution:#E9A13B; --over:#FF3B30;
+    --state:var(--nominal); --stateGlow:rgba(57,255,20,.55);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;background:var(--bg);color:var(--fg);
+    font-family:"DM Mono",ui-monospace,monospace;-webkit-font-smoothing:antialiased;overflow:hidden;}
+  body{display:flex;align-items:center;justify-content:center;}
+  /* instrument atmosphere */
+  #vignette{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 42%, transparent 40%, rgba(0,0,0,.55) 100%);}
+  #grain{position:fixed;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  #scan{position:fixed;inset:0;pointer-events:none;opacity:.35;
+    background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.16) 3px 4px);}
+
+  .panel{position:relative;width:min(94vw,660px);padding:34px 40px 30px;}
+  /* corner registration */
+  .reg{position:absolute;width:22px;height:22px;opacity:.5;}
+  .reg::before,.reg::after{content:"";position:absolute;background:var(--dimmer);}
+  .reg::before{width:22px;height:1px;top:0;}.reg::after{width:1px;height:22px;left:0;}
+  .r-tl{top:0;left:0;}.r-tr{top:0;right:0;transform:scaleX(-1);}
+  .r-bl{bottom:0;left:0;transform:scaleY(-1);}.r-br{bottom:0;right:0;transform:scale(-1);}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.34em;text-transform:uppercase;}
+  .brand{font-weight:500;}
+  .topR{display:flex;align-items:center;gap:14px;color:var(--dim);}
+  .live{display:flex;align-items:center;gap:8px;color:var(--state);}
+  .live .d{width:7px;height:7px;border-radius:50%;background:var(--state);box-shadow:0 0 10px var(--stateGlow);animation:blink 1.8s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+  /* gauge */
+  .gauge{position:relative;width:420px;height:420px;margin:14px auto 8px;}
+  .gauge svg{position:absolute;inset:0;transform:rotate(-90deg);overflow:visible;}
+  .track{fill:none;stroke:var(--hair);stroke-width:2;}
+  .arc{fill:none;stroke:var(--state);stroke-width:5;stroke-linecap:round;
+    filter:drop-shadow(0 0 12px var(--stateGlow));transition:stroke-dashoffset .7s cubic-bezier(.22,1,.36,1),stroke .5s;}
+  .ticks line{stroke:var(--dimmer);stroke-width:1.5;}
+  .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .costwrap{display:flex;align-items:baseline;justify-content:center;line-height:.9;}
+  .cur{font-size:34px;font-weight:300;color:var(--state);opacity:.9;transform:translateY(-46px);text-shadow:0 0 20px var(--stateGlow);}
+  .dollars{font-size:118px;font-weight:300;letter-spacing:-.02em;color:var(--state);text-shadow:0 0 34px var(--stateGlow);font-variant-numeric:tabular-nums;transition:color .5s;}
+  .cents{font-size:46px;font-weight:300;color:var(--state);opacity:.72;transform:translateY(-40px);font-variant-numeric:tabular-nums;}
+  .heroLbl{margin-top:6px;font-size:11px;letter-spacing:.4em;text-transform:uppercase;color:var(--dim);}
+  .stateLbl{margin-top:16px;font-size:12px;letter-spacing:.42em;text-transform:uppercase;color:var(--state);
+    padding:5px 14px;border:1px solid var(--state);border-radius:2px;}
+  .pulse{position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--state);opacity:0;pointer-events:none;}
+  .pulse.go{animation:ping .9s cubic-bezier(.22,1,.36,1);}
+  @keyframes ping{0%{transform:scale(.86);opacity:.7}100%{transform:scale(1.06);opacity:0}}
+
+  /* secondary readouts */
+  .row2{display:flex;gap:1px;margin-top:6px;}
+  .cell{flex:1;text-align:center;padding:14px 8px;border-top:1px solid var(--hair);}
+  .cell .v{font-size:30px;font-weight:400;font-variant-numeric:tabular-nums;}
+  .cell .v small{font-size:15px;opacity:.6;}
+  .cell .k{margin-top:6px;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--dim);}
+  .v.accent{color:var(--accent);}
+
+  /* composition (hidden-cost) bar */
+  .compo{margin-top:20px;}
+  .compo .bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.03);}
+  .compo .seg{height:100%;transition:width .6s ease;}
+  .compo .lg{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);}
+  .compo .lg span{display:flex;align-items:center;gap:7px;}
+  .compo .lg i{width:9px;height:3px;display:inline-block;border-radius:2px;}
+
+  .foot{display:flex;justify-content:space-between;margin-top:20px;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dimmer);}
+  .foot b{color:var(--dim);font-weight:400;}
+  kbd{border:1px solid var(--hair);border-radius:3px;padding:1px 6px;color:var(--dim);}
+</style>
+</head>
+<body>
+  <div id="vignette"></div><div id="grain"></div><div id="scan"></div>
+
+  <div class="panel">
+    <span class="reg r-tl"></span><span class="reg r-tr"></span><span class="reg r-bl"></span><span class="reg r-br"></span>
+
+    <div class="topbar">
+      <span class="brand">TOKENHOURS</span>
+      <span class="topR"><span id="clock">00:00</span><span class="live"><span class="d"></span><span id="livelbl">METERING</span></span></span>
+    </div>
+
+    <div class="gauge">
+      <svg viewBox="0 0 420 420">
+        <circle class="track" cx="210" cy="210" r="188"></circle>
+        <circle class="arc" id="arc" cx="210" cy="210" r="188"
+                stroke-dasharray="1181" stroke-dashoffset="1181"></circle>
+        <g class="ticks" id="ticks"></g>
+      </svg>
+      <div class="pulse" id="pulse"></div>
+      <div class="center">
+        <div class="costwrap">
+          <span class="cur">$</span><span class="dollars" id="dollars">0</span><span class="cents" id="cents">.00</span>
+        </div>
+        <div class="heroLbl">Build cost · session</div>
+        <div class="stateLbl" id="stateLbl">Nominal</div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="cell"><div class="v"><span id="perhour">0.00</span><small> $/hr</small></div><div class="k">Burn rate</div></div>
+      <div class="cell"><div class="v accent"><span id="projected">0</span><small> /40h</small></div><div class="k">Projected</div></div>
+      <div class="cell"><div class="v"><span id="tokph">0</span><small>/hr</small></div><div class="k">Tokens</div></div>
+      <div class="cell"><div class="v"><span id="reqs">0</span></div><div class="k">Requests</div></div>
+    </div>
+
+    <div class="compo">
+      <div class="bar" id="compobar">
+        <div class="seg" data-k="conv" style="background:var(--accent);width:0"></div>
+        <div class="seg" data-k="mcp" style="background:var(--caution);width:0"></div>
+        <div class="seg" data-k="tools" style="background:#8a6db8;width:0"></div>
+        <div class="seg" data-k="out" style="background:var(--fg);width:0"></div>
+        <div class="seg" data-k="cache" style="background:rgba(74,107,184,.4);width:0"></div>
+      </div>
+      <div class="lg">
+        <span><i style="background:var(--accent)"></i>Conversation</span>
+        <span><i style="background:var(--caution)"></i>MCP overhead</span>
+        <span><i style="background:#8a6db8"></i>Tool results</span>
+        <span><i style="background:var(--fg)"></i>Output</span>
+        <span><i style="background:rgba(74,107,184,.4)"></i>Cache</span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span>Rates · <b id="ratenote">—</b></span>
+      <span id="lastmodel">Awaiting first request…</span>
+      <span>Reset · <kbd>R</kbd></span>
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const R = 188, CIRC = 2 * Math.PI * R;
+  $("arc").setAttribute("stroke-dasharray", CIRC.toFixed(1));
+  $("arc").setAttribute("stroke-dashoffset", CIRC.toFixed(1));
+  // tick marks
+  (() => {
+    const g = $("ticks"); let s = "";
+    for (let i = 0; i < 60; i++){ const a = (i/60)*2*Math.PI; const big = i%5===0;
+      const r1 = R+ (big?14:9), r2 = R+18;
+      s += `<line x1="${210+Math.cos(a)*r1}" y1="${210+Math.sin(a)*r1}" x2="${210+Math.cos(a)*r2}" y2="${210+Math.sin(a)*r2}" opacity="${big?.7:.35}"/>`; }
+    g.innerHTML = s;
+  })();
+
+  const fmt = (n, d=0) => Number(n).toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
+  const money = (n) => n>=1000 ? "$"+fmt(n,0) : "$"+fmt(n,2);
+  const compact = (n) => n>=1e6 ? (n/1e6).toFixed(1)+"M" : n>=1e3 ? (n/1e3).toFixed(0)+"k" : fmt(n,0);
+
+  // count-up tween for the hero number
+  let shownCost = 0, targetCost = 0, raf = null;
+  function tween(){
+    const diff = targetCost - shownCost;
+    if (Math.abs(diff) < 0.001){ shownCost = targetCost; render(); raf=null; return; }
+    shownCost += diff * 0.16; render(); raf = requestAnimationFrame(tween);
+  }
+  function render(){
+    const c = shownCost;
+    const whole = Math.floor(c);
+    $("dollars").textContent = whole.toLocaleString("en-US");
+    $("cents").textContent = "." + (Math.round((c-whole)*100)).toString().padStart(2,"0");
+  }
+  function setState(cost, budget){
+    const r = budget>0 ? cost/budget : 0;
+    let name="Nominal", col="--nominal", glow="rgba(57,255,20,.55)";
+    if (r >= 1){ name="Over budget"; col="--over"; glow="rgba(255,59,48,.6)"; }
+    else if (r >= 0.7){ name="Caution"; col="--caution"; glow="rgba(233,161,59,.55)"; }
+    const root = document.documentElement.style;
+    root.setProperty("--state", `var(${col})`);
+    root.setProperty("--stateGlow", glow);
+    $("stateLbl").textContent = name;
+    // arc sweep = budget consumption, capped at full
+    const frac = Math.max(0, Math.min(r, 1));
+    $("arc").setAttribute("stroke-dashoffset", (CIRC*(1-frac)).toFixed(1));
+  }
+
+  let lastReq = 0;
+  function apply(s){
+    targetCost = s.cost; if(!raf) raf = requestAnimationFrame(tween);
+    setState(s.cost, s.budget);
+    $("perhour").textContent = fmt(s.perHour,2);
+    $("projected").textContent = money(s.projected);
+    $("tokph").textContent = compact(s.tokPerHour);
+    $("reqs").textContent = s.requests;
+    $("ratenote").textContent = s.rateNote || "—";
+    $("lastmodel").textContent = s.lastModel ? (s.lastModel.split("/").pop()+"  +"+money(s.lastCost)) : "Awaiting first request…";
+    // composition bar
+    const conv = Math.max(s.input - s.overheadTok, 0), mcp = s.toolDefTokEst, tools = s.toolResultTokEst, out = s.output, cache = s.cacheRead;
+    const tot = conv+mcp+tools+out+cache || 1;
+    const segs = {conv, mcp, tools, out, cache};
+    document.querySelectorAll("#compobar .seg").forEach(el=>{ el.style.width = (100*segs[el.dataset.k]/tot).toFixed(2)+"%"; });
+    // pulse on a new charge
+    if (s.requests > lastReq){ const p=$("pulse"); p.classList.remove("go"); void p.offsetWidth; p.classList.add("go"); lastReq = s.requests; }
+    startedAt = s.now - s.elapsedMs;
+  }
+
+  let startedAt = Date.now();
+  setInterval(()=>{ const t=Math.max(0,Date.now()-startedAt); const m=Math.floor(t/60000), sec=Math.floor(t/1000)%60;
+    $("clock").textContent = String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0"); }, 1000);
+
+  const TH_TOKEN = "__TH_TOKEN__";   // injected same-origin by the proxy; numbers-only channel
+  // first-paint snapshot injected by the proxy — HUD is never blank
+  let INIT = null; try { INIT = __TH_INIT__; } catch (e) {}
+  if (INIT) { lastReq = INIT.requests; apply(INIT); shownCost = targetCost; render(); }
+  const es = new EventSource("/events?token=" + TH_TOKEN);
+  es.onmessage = (e)=>{ try{ apply(JSON.parse(e.data)); }catch{} };
+  es.onerror = ()=>{ $("livelbl").textContent="RECONNECT"; };
+  addEventListener("keydown", e=>{ if(e.key==="r"||e.key==="R") fetch("/reset",{method:"POST",headers:{"x-th-token":TH_TOKEN}}); });
+</script>
+</body>
+</html>

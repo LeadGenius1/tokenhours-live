@@ -1,0 +1,47 @@
+{
+  "name": "tokenhours-live",
+  "version": "0.1.0",
+  "description": "Real-time AI build-cost meter. A localhost proxy that prices every model call live and shows a running total in an instrument HUD \u00e2\u20ac\u201d and sees nothing: prompts, responses and keys never leave your machine.",
+  "type": "module",
+  "bin": {
+    "tokenhours-live": "meter.mjs",
+    "tokenhours-statusline": "statusline.mjs"
+  },
+  "files": [
+    "meter.mjs",
+    "hud.html",
+    "prices.fallback.json",
+    "prices.meta.json",
+    "README.md",
+    "SECURITY.md",
+    "VALIDATION.md",
+    "LICENSE",
+    "statusline.mjs"
+  ],
+  "scripts": {
+    "start": "node meter.mjs",
+    "test": "node test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeadGenius1/tokenhours-live.git"
+  },
+  "homepage": "https://tokenhours.com",
+  "keywords": [
+    "ai",
+    "llm",
+    "cost",
+    "tokens",
+    "anthropic",
+    "openai",
+    "proxy",
+    "observability",
+    "privacy",
+    "local-first"
+  ],
+  "author": "AI Lead Strategies LLC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
