@@ -132,20 +132,20 @@ console.log(`\nTOKENHOURS Live — accuracy proof  (rates: bundled offline table
 //     through to the est default (3/15/0.3) — the flagship model was mispriced.
 //     Regression guard for the 2026-08-02 live-reconciliation finding.
 {
-  const cases = [
-    { id: "claude-opus-4-8",   row: "anthropic/claude-opus-4.8" },
-    { id: "claude-haiku-4-5",  row: "anthropic/claude-haiku-4.5" },
-    { id: "claude-sonnet-4-6", row: "anthropic/claude-sonnet-4.6" },
-  ];
-  let ok = true; const detail = [];
-  for (const c of cases) {
-    const pub = RATES.find(r => r.id === c.row);
-    const got = await send("/anthropic/v1/messages", { model: c.id, shape: "anthropic", in: 100000, out: 5000, cr: 200000, cw: 0 });
-    const want = 100000 / 1e6 * pub.input + 5000 / 1e6 * pub.output + 200000 / 1e6 * (pub.cached ?? pub.input * 0.1);
-    const bm = (await state()).models.find(m => m.id === c.id);
+  // Cases are DERIVED from the actual table (dotted version ids), so the test can
+  // never depend on an invented row. Runtime id = table id with prefix dropped and
+  // dots turned to dashes — exactly what providers emit ("claude-opus-4.8" → "claude-opus-4-8").
+  const dotted = RATES.filter(r => /\d\.\d/.test(r.id)).slice(0, 4);
+  await fetch(`${base}/reset`, { method: "POST", headers: { "x-th-token": TOKEN } });   // isolate so all cases stay in the model list
+  let ok = dotted.length >= 3; const detail = [];
+  for (const row of dotted) {
+    const runtimeId = row.id.split("/").pop().replace(/\./g, "-");
+    const got = await send("/anthropic/v1/messages", { model: runtimeId, shape: "anthropic", in: 100000, out: 5000, cr: 200000, cw: 0 });
+    const want = 100000 / 1e6 * row.input + 5000 / 1e6 * row.output + 200000 / 1e6 * (row.cached ?? row.input * 0.1);
+    const bm = (await state()).models.find(m => m.id === runtimeId);
     const priced = approx(got, want), notEst = !!bm && bm.estimated === false;
     if (!priced || !notEst) ok = false;
-    detail.push(`${c.id}→${c.row.split("/").pop()}${priced ? "" : " COST≠pub"}${notEst ? "" : " EST!"}`);
+    detail.push(`${runtimeId}→${row.id.split("/").pop()}${priced ? "" : " COST≠pub"}${notEst ? "" : " EST!"}`);
   }
   ok ? pass++ : fail++;
   console.log(`  ${ok ? "✓" : "✗"} real runtime ids map to published rate (no est fallback)\n      ${detail.join("  ·  ")}`);

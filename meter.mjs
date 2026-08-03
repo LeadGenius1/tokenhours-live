@@ -320,10 +320,10 @@ async function collect(req) { const c = []; for await (const x of req) c.push(x)
 // demo: synthesize a realistic build session so the HUD can be seen without wiring a client
 function runDemo() {
   const seq = [
-    { model: "anthropic/claude-opus-4-8", input: 42000, output: 1800, cacheRead: 90000 },
-    { model: "openai/gpt-4o", input: 8000, output: 1200 },
-    { model: "anthropic/claude-sonnet-4-6", input: 120000, output: 3400, cacheRead: 210000 },
-    { model: "anthropic/claude-opus-4-8", input: 300000, output: 5200, cacheRead: 480000 },
+    { model: "claude-opus-4-8", input: 42000, output: 1800, cacheRead: 90000 },
+    { model: "gpt-5.6-sol", input: 8000, output: 1200 },
+    { model: "claude-haiku-4-5", input: 120000, output: 3400, cacheRead: 210000 },
+    { model: "claude-opus-4-8", input: 300000, output: 5200, cacheRead: 480000 },
   ];
   S.toolDefTokEst += 6200; S.toolResultTokEst += 14300;
   let i = 0;
