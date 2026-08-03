@@ -109,7 +109,7 @@ const S = {
   toolDefTokEst: 0, toolResultTokEst: 0,   // for the hidden-cost breakdown
   byModel: {}, connectors: [],
   lastModel: null, lastCost: 0, lastAt: 0,
-  rateNote: "loading",
+  rateNote: "loading", demo: false,
 };
 const est = (obj) => Math.round(JSON.stringify(obj ?? "").length / 4);
 
@@ -146,7 +146,7 @@ function snapshot() {
     connectorsCost: S.connectors.reduce((a, c) => a + c.cost, 0), connectors: S.connectors.slice(-6),
     models: Object.entries(S.byModel).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.cost - a.cost).slice(0, 6),
     lastModel: S.lastModel, lastCost: S.lastCost, lastAt: S.lastAt,
-    elapsedMs: Date.now() - S.startedAt, rateNote: S.rateNote, now: Date.now(),
+    elapsedMs: Date.now() - S.startedAt, rateNote: S.rateNote, demo: !!S.demo, now: Date.now(),
   };
 }
 function broadcast() {
@@ -156,7 +156,7 @@ function broadcast() {
 
 // ---------- session persistence (survive terminal close / restart) ----------
 // Running totals are written to a local JSON so a restart RESUMES instead of zeroing.
-const PERSIST_KEYS = ["startedAt", "requests", "errors", "cost", "input", "output", "cacheRead", "cacheWrite", "toolDefTokEst", "toolResultTokEst", "byModel", "connectors"];
+const PERSIST_KEYS = ["startedAt", "requests", "errors", "cost", "input", "output", "cacheRead", "cacheWrite", "toolDefTokEst", "toolResultTokEst", "byModel", "connectors", "demo"];
 let saveTimer = null, resumed = false;
 const collectPersist = () => { const o = {}; for (const k of PERSIST_KEYS) o[k] = S[k]; return o; };
 async function saveState() { try { await mkdir(dirname(STATE_FILE), { recursive: true }); await writeFile(STATE_FILE, JSON.stringify(collectPersist())); } catch {} }
@@ -282,6 +282,7 @@ const server = http.createServer(async (req, res) => {
     if (url === "/reconcile") { // per-model token totals to tick against the provider console
       const s = snapshot(); const pad = (x, n) => String(x).padEnd(n);
       let out = `TOKENHOURS Live · reconciliation  (session ${(s.elapsedMs / 60000).toFixed(1)} min)\n`;
+      if (s.demo) out += `⚠  SYNTHETIC DEMO DATA — this is NOT a real session. Do not reconcile. POST /reset.\n`;
       out += `rates: ${s.rateNote}\n\n${pad("MODEL", 34)}${pad("INPUT", 12)}${pad("OUTPUT", 12)}${pad("CACHE-RD", 12)}COST\n`;
       for (const m of s.models) out += `${pad(m.id, 34)}${pad(m.input.toLocaleString(), 12)}${pad(m.output.toLocaleString(), 12)}${pad((m.cacheRead || 0).toLocaleString(), 12)}$${m.cost.toFixed(4)}${m.estimated ? "  (est rate)" : ""}\n`;
       out += `\nTOTAL  $${s.cost.toFixed(4)}   · compare INPUT/OUTPUT per model to your provider usage export for the same window.\n`;
@@ -295,7 +296,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url === "/state") { res.writeHead(200, { "content-type": "application/json" }); return void res.end(JSON.stringify(snapshot())); }
     if (url === "/reset" && req.method === "POST") {
-      Object.assign(S, { startedAt: Date.now(), requests: 0, errors: 0, cost: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, toolDefTokEst: 0, toolResultTokEst: 0, byModel: {}, connectors: [], lastModel: null, lastCost: 0 });
+      Object.assign(S, { startedAt: Date.now(), requests: 0, errors: 0, cost: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, toolDefTokEst: 0, toolResultTokEst: 0, byModel: {}, connectors: [], lastModel: null, lastCost: 0, demo: false });
       broadcast(); saveState(); res.writeHead(200); return void res.end("ok");
     }
     if (url === "/meter/connector" && req.method === "POST") {
@@ -304,7 +305,13 @@ const server = http.createServer(async (req, res) => {
       catch { res.writeHead(400); res.end("bad json"); }
       return;
     }
-    if (url === "/demo") { runDemo(); res.writeHead(200); return void res.end("demo running"); }
+    if (url === "/demo") {
+      // Guard: demo must NEVER pollute a real reading. Refuse if the session already
+      // has charges; require an explicit ?confirm=1 even on an empty session.
+      if (S.requests > 0 || S.cost > 0) { res.writeHead(409, { "content-type": "text/plain" }); return void res.end("refused: session already has real charges — POST /reset first so demo can never pollute a reading.\n"); }
+      if (new URL(req.url, "http://x").searchParams.get("confirm") !== "1") { res.writeHead(400, { "content-type": "text/plain" }); return void res.end("refused: /demo injects SYNTHETIC data. Re-run with ?confirm=1 to acknowledge (empty session only).\n"); }
+      runDemo(); res.writeHead(200); return void res.end("demo running (synthetic — session flagged demo:true)\n");
+    }
     if (url === "/" || url === "/index.html") {
       // inject the session token + a first-paint snapshot (so the HUD is never blank)
       const html = (await readFile(join(__dir, "hud.html"), "utf8"))
@@ -319,6 +326,7 @@ async function collect(req) { const c = []; for await (const x of req) c.push(x)
 
 // demo: synthesize a realistic build session so the HUD can be seen without wiring a client
 function runDemo() {
+  S.demo = true;   // self-labeling: any synthetic session is flagged in /state + /reconcile
   const seq = [
     { model: "claude-opus-4-8", input: 42000, output: 1800, cacheRead: 90000 },
     { model: "gpt-5.6-sol", input: 8000, output: 1200 },
