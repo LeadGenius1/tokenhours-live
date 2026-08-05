@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TOKENHOURS Live · overlay</title>
+  <style>
+    /* Transparent overlay: the SAME full dashboard (in an iframe), shown on a slow
+       show/hide timer — hidden most of the time, fully visible ~1 min, then hidden.
+       No shrunk "mini" version; it's the real dashboard, just on a timer. In Electron
+       this rides in a transparent, click-through, always-on-top window. */
+    html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+      font-family: ui-monospace, monospace; }
+    #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transform: translateY(8px); transition: opacity 1.1s ease, transform 1.1s ease; pointer-events: none; }
+    #wrap.show { opacity: 1; transform: translateY(0); }
+    iframe { width: 680px; height: 900px; max-height: 96vh; border: 0; border-radius: 12px;
+      background: #050607; box-shadow: 0 24px 90px rgba(0,0,0,.65), 0 0 0 1px rgba(237,231,223,.06); }
+  </style>
+</head>
+<body>
+  <div id="wrap"><iframe src="/?token=__TH_TOKEN__" title="TOKENHOURS Live"></iframe></div>
+  <script>
+    // cadence (env-free; tune here): visible for VIS ms, hidden for HID ms, repeat.
+    const VIS = 60000;   // ~1 full minute visible — long enough to read every number
+    const HID = 240000;  // hidden ~4 min → a show roughly every 5 minutes
+    const wrap = document.getElementById("wrap");
+    function cycle() {
+      wrap.classList.add("show");
+      setTimeout(() => { wrap.classList.remove("show"); setTimeout(cycle, HID); }, VIS);
+    }
+    setTimeout(cycle, 1500); // first appearance shortly after load
+  </script>
+</body>
+</html>

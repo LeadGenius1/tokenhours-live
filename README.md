@@ -66,6 +66,25 @@ curl -XPOST localhost:4317/meter/connector \
   -d '{"name":"Stripe API","cost":0.012}'
 ```
 
+## True cost — time + subscriptions (v0.3)
+
+Token spend is only part of the bill. TOKENHOURS Live now folds in **the time you actually worked** and the **flat subscriptions** a token meter can't see, into one number — **true cost per hour**:
+
+    trueCostPerHour = tokenSpendToday / hoursWorkedToday
+                    + subscriptionsThisMonth / hoursWorkedThisMonth
+
+- **Time** — a local heartbeat checks which window is in front every ~45s; if it's a "working" app (editor, terminal, your provider console…) it credits the time and auto-pauses after 5 minutes idle. Focus only — never keystrokes or screen content. Zero dependencies (OS commands).
+- **Subscriptions** — a hand-entered list, prorated across the hours you work this month. No bank, no card, ever.
+
+```bash
+npx tokenhours-live --add-sub "Railway" 20     # add a $20/mo subscription
+npx tokenhours-live --subs                       # list them
+```
+
+The dashboard gains a **True Cost** readout (the existing gauge, labels and bars are unchanged). An **overlay** — `GET /overlay` — shows the *same* full dashboard on a slow timer: hidden most of the time, fully visible for about a minute every five, so you can glance the real number without it being in the way (this is what the desktop app rides on).
+
+> Time is tracked from window focus only — never keystrokes or screen content. Subscriptions are entered by hand — no bank or card ever connected. Nothing here calls an AI or leaves your device.
+
 ## Config (env)
 
 | Var | Default | Meaning |
@@ -79,12 +98,16 @@ curl -XPOST localhost:4317/meter/connector \
 | `OPENAI_UPSTREAM` | `https://api.openai.com` | OpenAI-compatible origin |
 | `TH_PRICES_URL` | `https://tokenhours.com/api/prices` | Live rate table (falls back to bundled `prices.fallback.json`) |
 | `TH_STATE` | `~/.tokenhours-live/session.json` | Where the running session is persisted (see below) |
+| `TH_SUBSCRIPTIONS` | `~/.tokenhours-live/subscriptions.json` | Your hand-entered monthly subscriptions (True Cost) |
+| `TH_HEARTBEAT` | `~/.tokenhours-live/heartbeat.json` | Local focus-time log, minutes/day (True Cost) |
+| `TH_IDLE_MIN` | `5` | Minutes of no focus that auto-pause the work clock |
 
 ## Endpoints
 
 - `GET /` — the HUD
 - `GET /events` — SSE stream of meter state
-- `GET /state` — JSON snapshot
+- `GET /state` — JSON snapshot (now includes `trueCostPerHour`, `hoursToday`, `subsMonthly`)
+- `GET /overlay` — the same dashboard on a slow show/hide timer (tray/wallpaper overlay)
 - `POST /reset` — zero the session (or press **R** in the HUD)
 - `POST /meter/connector` — add a non-LLM connector cost
 - `ANY /anthropic/*`, `ANY /openai/*` — metered pass-through proxies

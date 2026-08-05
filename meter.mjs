@@ -23,6 +23,17 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+// True Cost upgrade — additive local data sources (time + subscriptions). Same
+// "sees nothing" architecture: no network, no content, computed on-device.
+import { startHeartbeat } from "./heartbeat.mjs";
+import { computeTrueCost } from "./true-cost.mjs";
+import { addSub, getSubscriptions, monthlyTotal } from "./subscriptions.mjs";
+
+// CLI subcommands (before the server boots): manage the hand-entered subscription list.
+const ARGV = process.argv.slice(2);
+if (ARGV[0] === "--add-sub" && ARGV[1]) { addSub(ARGV[1], ARGV[2], ARGV[3]); console.log(`  added subscription: ${ARGV[1]} · $${+ARGV[2] || 0}/mo`); process.exit(0); }
+if (ARGV[0] === "--subs") { const s = getSubscriptions(); if (s.length) { console.table(s); console.log(`  monthly total: $${monthlyTotal().toFixed(2)}`); } else console.log("  no subscriptions yet — add:  npx tokenhours-live --add-sub \"Railway\" 20"); process.exit(0); }
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 // ── Privacy model — "the meter that sees nothing" ────────────────────────────
 // The proxy computes cost ON-DEVICE and transmits NOTHING about your work:
@@ -108,9 +119,11 @@ const S = {
   input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
   toolDefTokEst: 0, toolResultTokEst: 0,   // for the hidden-cost breakdown
   byModel: {}, connectors: [],
+  dailyCost: {},                            // token+connector $ bucketed per day → tokenSpendToday
   lastModel: null, lastCost: 0, lastAt: 0,
   rateNote: "loading", demo: false,
 };
+const addDaily = (c) => { const k = dayKey(); S.dailyCost[k] = (S.dailyCost[k] || 0) + c; };
 const est = (obj) => Math.round(JSON.stringify(obj ?? "").length / 4);
 
 function priceCharge({ model, input = 0, output = 0, cacheRead = 0, cacheWrite = 0 }) {
@@ -120,7 +133,7 @@ function priceCharge({ model, input = 0, output = 0, cacheRead = 0, cacheWrite =
     (output / 1e6) * (r.output ?? 15) +
     (cacheRead / 1e6) * (r.cached ?? (r.input ?? 3) * 0.1) +
     (cacheWrite / 1e6) * ((r.input ?? 3) * 1.25);
-  S.cost += c; S.input += input; S.output += output; S.cacheRead += cacheRead; S.cacheWrite += cacheWrite;
+  S.cost += c; addDaily(c); S.input += input; S.output += output; S.cacheRead += cacheRead; S.cacheWrite += cacheWrite;
   S.requests += 1; S.lastModel = model; S.lastCost = c; S.lastAt = Date.now();
   const key = model || "unknown";
   const bm = (S.byModel[key] ||= { cost: 0, input: 0, output: 0, cacheRead: 0, reqs: 0, estimated: !!r._default });
@@ -136,7 +149,10 @@ function snapshot() {
   const perHour = S.cost / elapsedH;
   const totalTok = S.input + S.output + S.cacheRead;
   const overheadTok = S.toolDefTokEst + S.toolResultTokEst;
+  const tc = computeTrueCost({ tokenSpendToday: S.dailyCost[dayKey()] || 0 }); // time + subscriptions, layered in
   return {
+    trueCostPerHour: tc.trueCostPerHour, tokenPerHourWorked: tc.tokenPerHour, subsPerHour: tc.subsPerHour,
+    hoursToday: tc.hoursToday, subsMonthly: tc.subsMonthly, costToday: tc.tokenSpendToday, trueReady: tc.ready,
     cost: S.cost, perHour, projected: perHour * HORIZON, horizon: HORIZON, budget: BUDGET,
     requests: S.requests, errors: S.errors,
     input: S.input, output: S.output, cacheRead: S.cacheRead,
@@ -156,7 +172,7 @@ function broadcast() {
 
 // ---------- session persistence (survive terminal close / restart) ----------
 // Running totals are written to a local JSON so a restart RESUMES instead of zeroing.
-const PERSIST_KEYS = ["startedAt", "requests", "errors", "cost", "input", "output", "cacheRead", "cacheWrite", "toolDefTokEst", "toolResultTokEst", "byModel", "connectors", "demo"];
+const PERSIST_KEYS = ["startedAt", "requests", "errors", "cost", "input", "output", "cacheRead", "cacheWrite", "toolDefTokEst", "toolResultTokEst", "byModel", "connectors", "dailyCost", "demo"];
 let saveTimer = null, resumed = false;
 const collectPersist = () => { const o = {}; for (const k of PERSIST_KEYS) o[k] = S[k]; return o; };
 async function saveState() { try { await mkdir(dirname(STATE_FILE), { recursive: true }); await writeFile(STATE_FILE, JSON.stringify(collectPersist())); } catch {} }
@@ -301,7 +317,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url === "/meter/connector" && req.method === "POST") {
       const b = Buffer.concat(await collect(req)).toString("utf8");
-      try { const { name, cost, note } = JSON.parse(b); S.connectors.push({ name: name || "connector", cost: +cost || 0, note, at: Date.now() }); S.cost += +cost || 0; broadcast(); scheduleSave(); res.writeHead(200); res.end("ok"); }
+      try { const { name, cost, note } = JSON.parse(b); S.connectors.push({ name: name || "connector", cost: +cost || 0, note, at: Date.now() }); S.cost += +cost || 0; addDaily(+cost || 0); broadcast(); scheduleSave(); res.writeHead(200); res.end("ok"); }
       catch { res.writeHead(400); res.end("bad json"); }
       return;
     }
@@ -311,6 +327,11 @@ const server = http.createServer(async (req, res) => {
       if (S.requests > 0 || S.cost > 0) { res.writeHead(409, { "content-type": "text/plain" }); return void res.end("refused: session already has real charges — POST /reset first so demo can never pollute a reading.\n"); }
       if (new URL(req.url, "http://x").searchParams.get("confirm") !== "1") { res.writeHead(400, { "content-type": "text/plain" }); return void res.end("refused: /demo injects SYNTHETIC data. Re-run with ?confirm=1 to acknowledge (empty session only).\n"); }
       runDemo(); res.writeHead(200); return void res.end("demo running (synthetic — session flagged demo:true)\n");
+    }
+    if (url === "/overlay") {
+      // the SAME full dashboard, shown on a slow show/hide timer (see overlay/indicator.html)
+      const html = (await readFile(join(__dir, "overlay", "indicator.html"), "utf8")).replaceAll("__TH_TOKEN__", TOKEN);
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }); return void res.end(html);
     }
     if (url === "/" || url === "/index.html") {
       // inject the session token + a first-paint snapshot (so the HUD is never blank)
@@ -342,6 +363,7 @@ function runDemo() {
 await loadState();
 const note = await loadRates(); S.rateNote = note;
 if (!OFFLINE) setInterval(async () => { S.rateNote = await loadRates(); }, 36e5);
+startHeartbeat({ quiet: true }); // True Cost: track focus-time locally (no keystrokes/content/network)
 server.listen(PORT, HOST, () => {
   console.log(`\n  TOKENHOURS Live · the meter that sees nothing`);
   console.log(`  HUD    → http://localhost:${PORT}/?token=${TOKEN}`);

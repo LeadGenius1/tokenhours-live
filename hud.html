@@ -56,6 +56,12 @@
   .heroLbl{margin-top:6px;font-size:11px;letter-spacing:.4em;text-transform:uppercase;color:var(--dim);}
   .stateLbl{margin-top:16px;font-size:12px;letter-spacing:.42em;text-transform:uppercase;color:var(--state);
     padding:5px 14px;border:1px solid var(--state);border-radius:2px;}
+  /* True Cost — additive readout (time + subscriptions), layered alongside the existing dashboard */
+  .trueCost{display:none;align-items:baseline;justify-content:center;gap:12px;margin:16px 0 2px;}
+  .trueCost .tcLabel{font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:var(--dim);}
+  .trueCost .tcVal{font-size:28px;font-weight:400;color:var(--state);font-variant-numeric:tabular-nums;text-shadow:0 0 14px var(--stateGlow);}
+  .trueCost .tcUnit{font-size:14px;color:var(--dim);}
+  .trueCost .tcNote{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer);}
   .pulse{position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--state);opacity:0;pointer-events:none;}
   .pulse.go{animation:ping .9s cubic-bezier(.22,1,.36,1);}
   @keyframes ping{0%{transform:scale(.86);opacity:.7}100%{transform:scale(1.06);opacity:0}}
@@ -107,6 +113,12 @@
         <div class="heroLbl">Build cost · session</div>
         <div class="stateLbl" id="stateLbl">Nominal</div>
       </div>
+    </div>
+
+    <div class="trueCost" id="trueCostWrap">
+      <span class="tcLabel">True cost</span>
+      <span class="tcVal" id="tcVal">$0.00</span><span class="tcUnit">/hr</span>
+      <span class="tcNote" id="tcNote"></span>
     </div>
 
     <div class="row2">
@@ -193,6 +205,12 @@
     $("projected").textContent = money(s.projected);
     $("tokph").textContent = compact(s.tokPerHour);
     $("reqs").textContent = s.requests;
+    // True Cost (additive): shows once some focus-time has been tracked today
+    if (s.trueReady) {
+      $("trueCostWrap").style.display = "flex";
+      $("tcVal").textContent = money(s.trueCostPerHour);
+      $("tcNote").textContent = `${s.hoursToday.toFixed(1)}h today${s.subsMonthly ? " · subs $" + s.subsMonthly.toFixed(0) + "/mo" : ""}`;
+    }
     $("ratenote").textContent = s.rateNote || "—";
     $("lastmodel").textContent = s.lastModel ? (s.lastModel.split("/").pop()+"  +"+money(s.lastCost)) : "Awaiting first request…";
     // composition bar
