@@ -1,0 +1,33 @@
+{
+  "_note": "Per-unit prices for NON-TOKEN paid tool calls, folded into the true build cost. Prices in USD. Edit to match YOUR plan. Checked 2026-08-05. Token LLM calls (Claude/OpenAI chat) are metered automatically by the proxy — this file is for image/video/scrape/audio and other credit-billed services.",
+  "firecrawl": {
+    "unit": "credit",
+    "perCredit": 0.00083,
+    "_planNote": "Effective $/credit by plan — Hobby 0.0032, Standard 0.00083, Growth 0.00066, Scale 0.0006, Free 0. Set perCredit to your plan. If a response reports creditsUsed, that is used directly.",
+    "creditsPerOp": { "scrape": 1, "crawl": 1, "map": 1, "monitor": 1, "search": 2, "extract": 5, "stealth": 5 }
+  },
+  "openai": {
+    "images": {
+      "gpt-image-1": { "low": 0.011, "medium": 0.042, "high": 0.167 },
+      "dall-e-3": { "1024x1024": 0.04, "1024x1792": 0.08, "1792x1024": 0.08, "hd-1024x1024": 0.08, "hd-1024x1792": 0.12, "hd-1792x1024": 0.12 },
+      "dall-e-2": { "1024x1024": 0.02, "512x512": 0.018, "256x256": 0.016 }
+    },
+    "audio": {
+      "tts-1": { "perMillionChars": 15 },
+      "tts-1-hd": { "perMillionChars": 30 },
+      "gpt-4o-mini-tts": { "perMillionChars": 12 },
+      "whisper-1": { "perMinute": 0.006 },
+      "gpt-4o-transcribe": { "perMinute": 0.006 }
+    },
+    "embeddings": {
+      "text-embedding-3-small": { "perMillionTokens": 0.02 },
+      "text-embedding-3-large": { "perMillionTokens": 0.13 }
+    }
+  },
+  "higgsfield": {
+    "unit": "credit",
+    "perCredit": 0.049,
+    "_planNote": "Account rate pulled 2026-08-05 via Higgsfield MCP: Plus plan, $49/mo ÷ ~1,000 credits ≈ $0.049/credit (top-ups ~$0.05/credit). If a job result reports credits/cost, that is used directly.",
+    "creditsPerOp": { "generate_image": 1, "generate_video": 5, "upscale_video": 3, "generate_3d": 4, "generate_audio": 1 }
+  }
+}

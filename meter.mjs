@@ -365,6 +365,13 @@ const note = await loadRates(); S.rateNote = note;
 if (!OFFLINE) setInterval(async () => { S.rateNote = await loadRates(); }, 36e5);
 startHeartbeat({ quiet: true }); // True Cost: track focus-time locally (no keystrokes/content/network)
 server.listen(PORT, HOST, () => {
+  // Write a local endpoint file so on-device connector reporters (and the Claude Code
+  // hook) can find the port + token to POST costs to /meter/connector. Loopback only.
+  try {
+    const dir = join(os.homedir(), ".tokenhours-live");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "endpoint.json"), JSON.stringify({ url: `http://127.0.0.1:${PORT}`, token: TOKEN, port: PORT, pid: process.pid, startedAt: Date.now() }));
+  } catch {}
   console.log(`\n  TOKENHOURS Live · the meter that sees nothing`);
   console.log(`  HUD    → http://localhost:${PORT}/?token=${TOKEN}`);
   console.log(`  rates  → ${note}${OFFLINE ? " (offline)" : ""}`);

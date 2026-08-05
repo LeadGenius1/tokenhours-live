@@ -28,7 +28,7 @@ function startMeter() {
 function createOverlay() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   win = new BrowserWindow({
-    width: 720, height: 960, x: width - 740, y: Math.max(0, height - 980),
+    width: 210, height: 270, x: width - 226, y: Math.max(0, height - 290),
     transparent: true, frame: false, resizable: false, movable: false,
     skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false,
     webPreferences: { contextIsolation: true },

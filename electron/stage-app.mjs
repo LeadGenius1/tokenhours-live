@@ -10,7 +10,7 @@ const APP = path.join(HERE, "app");
 rmSync(APP, { recursive: true, force: true });
 mkdirSync(path.join(APP, "overlay"), { recursive: true });
 
-const files = ["meter.mjs", "hud.html", "heartbeat.mjs", "subscriptions.mjs", "true-cost.mjs", "prices.fallback.json", "prices.meta.json"];
+const files = ["meter.mjs", "hud.html", "heartbeat.mjs", "subscriptions.mjs", "true-cost.mjs", "prices.fallback.json", "prices.meta.json", "connectors.mjs", "connectors.json", "connector-hook.mjs"];
 for (const f of files) cpSync(path.join(SRC, f), path.join(APP, f));
 cpSync(path.join(SRC, "overlay", "indicator.html"), path.join(APP, "overlay", "indicator.html"));
 console.log(`staged ${files.length + 1} meter files → electron/app/`);

@@ -1,6 +1,6 @@
 {
   "name": "tokenhours-live",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Real-time AI build-cost meter. A localhost proxy that prices every model call live and shows a running total in an instrument HUD \u00e2\u20ac\u201d and sees nothing: prompts, responses and keys never leave your machine.",
   "type": "module",
   "bin": {
@@ -13,6 +13,9 @@
     "heartbeat.mjs",
     "subscriptions.mjs",
     "true-cost.mjs",
+    "connectors.mjs",
+    "connectors.json",
+    "connector-hook.mjs",
     "overlay/indicator.html",
     "prices.fallback.json",
     "prices.meta.json",
