@@ -1,7 +1,7 @@
 {
   "name": "tokenhours-live-desktop",
   "productName": "TokenHours Live",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "main": "main.mjs",
@@ -21,9 +21,10 @@
   "build": {
     "appId": "com.tokenhours.live",
     "productName": "TokenHours Live",
+    "asar": false,
     "files": ["main.mjs", "app/**/*", "build/tray.png"],
     "directories": { "buildResources": "build", "output": "dist" },
-    "win": { "target": "nsis", "icon": "build/icon.png", "artifactName": "TokenHours-Live-Setup.${ext}" },
+    "win": { "target": ["zip"], "icon": "build/icon.png", "artifactName": "TokenHours-Live-win-portable.${ext}" },
     "mac": { "target": "dmg", "icon": "build/icon.png", "category": "public.app-category.developer-tools", "artifactName": "TokenHours-Live.${ext}" },
     "nsis": { "oneClick": true, "perMachine": false, "runAfterFinish": true }
   }

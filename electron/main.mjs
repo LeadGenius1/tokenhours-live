@@ -4,7 +4,8 @@
 // lives in the tray, and shows the same full dashboard as a transparent,
 // click-through overlay on the slow show/hide timer. No code changes to the meter —
 // this just launches it and hosts the /overlay window.
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell, utilityProcess, screen } from "electron";
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, screen } from "electron";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,7 +15,15 @@ const METER = path.join(__dir, "app", "meter.mjs"); // staged by stage-app.mjs a
 let meter, win, tray;
 
 function startMeter() {
-  meter = utilityProcess.fork(METER, [], { env: { ...process.env, PORT: String(PORT), TH_STATE: undefined } });
+  // Run the meter as a plain Node process using Electron's own binary
+  // (ELECTRON_RUN_AS_NODE). utilityProcess.fork can't load the ESM meter from
+  // a packaged app; spawning electron-as-node runs meter.mjs exactly like the CLI.
+  meter = spawn(process.execPath, [METER], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", PORT: String(PORT) },
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  meter.on("error", (e) => console.error("[tokenhours] meter failed to start:", e));
 }
 function createOverlay() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
