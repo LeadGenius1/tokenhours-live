@@ -141,6 +141,45 @@ npm i -g pm2 && pm2 start "npx -y tokenhours-live" --name tokenhours-live && pm2
 
 ## Troubleshooting
 
+### The meter is not running — `ECONNREFUSED`
+
+If Claude Code, the Anthropic/OpenAI SDK, or anything else you pointed at the meter
+suddenly dies with one of these:
+
+```text
+ECONNREFUSED
+Unable to connect to API (ConnectionRefused)
+connect ECONNREFUSED 127.0.0.1:4317
+```
+
+**The meter is not running.** Your client is pointed at `http://localhost:4317`
+(through `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`), so every call has nowhere to land —
+the crash is the meter being down, not your code. Three ways out, pick one:
+
+1. **Start it.** `npx tokenhours-live` (or `node meter.mjs` from the repo), then re-run your build.
+2. **Check it.** Open `http://localhost:4317` in a browser, or `curl http://localhost:4317/` — the
+   HUD answers if the meter is up; `ECONNREFUSED` means it is still down. Wrong port? See the trap below.
+3. **Bypass it.** Remove `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` from the `env` block of your Claude
+   Code settings (or `unset` them in your shell) and build with the meter out of the path.
+
+**The trap — Claude Code reads two settings files, and the project one wins:**
+
+| File | Scope |
+|---|---|
+| `~/.claude/settings.json` | global — every project |
+| `<repo>/.claude/settings.json` | this repo only — **overrides the global** |
+
+Cleared the base URL globally but still hitting `ECONNREFUSED` inside one repo? The **project**
+file is still routing that repo's Claude at a dead meter — fix **both** paths. Common variant: the
+global points at `4317` while a project points at `4318`; if only a `4317` meter is running, that one
+repo dies on `4318` while everything else works.
+
+> **A reboot kills the meter** — it does not restart itself. After you log back in you'll hit
+> `ECONNREFUSED` again until you start it, unless you set it to launch automatically. See
+> [Keep it always-on](#keep-it-always-on-optional).
+
+### Other issues
+
 - **HUD shows "connection refused" / "site can't be reached" / `RECONNECT`.**
   The meter isn't running — start it with `npx tokenhours-live`, then reload the HUD.
 - **HUD loads but the number stays $0.** Your build isn't routed through the meter yet — set
