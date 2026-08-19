@@ -134,14 +134,18 @@ Set a fixed token first (so the HUD/statusline can read it): `setx TH_TOKEN your
 **Windows — Startup shortcut:** press `Win+R` → `shell:startup` → new shortcut to
 `cmd /c npx -y tokenhours-live`.
 
-**macOS / Linux — keep it supervised:**
+**macOS / Linux — keep it supervised (survives reboot):**
 ```bash
-npm i -g pm2 && pm2 start "npx -y tokenhours-live" --name tokenhours-live && pm2 save
+npm i -g pm2
+pm2 start "npx -y tokenhours-live" --name tokenhours-live
+pm2 startup      # prints a command — run the printed command to register the boot hook
+pm2 save         # snapshot the process list so the boot hook resurrects it
 ```
+`pm2 save` **alone does not survive a reboot** — run `pm2 startup` (and the command it prints) first.
 
 ## Troubleshooting
 
-### The meter is not running — `ECONNREFUSED`
+### `ECONNREFUSED` — the meter isn't answering
 
 If Claude Code, the Anthropic/OpenAI SDK, or anything else you pointed at the meter
 suddenly dies with one of these:
@@ -152,9 +156,10 @@ Unable to connect to API (ConnectionRefused)
 connect ECONNREFUSED 127.0.0.1:4317
 ```
 
-**The meter is not running.** Your client is pointed at `http://localhost:4317`
-(through `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`), so every call has nowhere to land —
-the crash is the meter being down, not your code. Three ways out, pick one:
+**Nothing is listening where your client is pointed.** It's aimed at `http://localhost:4317`
+(through `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`), and `ECONNREFUSED` means no meter answered
+there — either it isn't running, or it's up on a **different port** than your client targets
+(see the trap below). Either way it's the meter, not a bug in your code. Three ways out, pick one:
 
 1. **Start it.** `npx tokenhours-live` (or `node meter.mjs` from the repo), then re-run your build.
 2. **Check it.** Open `http://localhost:4317` in a browser, or `curl http://localhost:4317/` — the
