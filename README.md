@@ -137,7 +137,7 @@ Set a fixed token first (so the HUD/statusline can read it): `setx TH_TOKEN your
 **macOS / Linux — keep it supervised (survives reboot):**
 ```bash
 npm i -g pm2
-pm2 start "npx -y tokenhours-live" --name tokenhours-live
+pm2 start npx --name tokenhours-live -- -y tokenhours-live
 pm2 startup      # prints a command — run the printed command to register the boot hook
 pm2 save         # snapshot the process list so the boot hook resurrects it
 ```
